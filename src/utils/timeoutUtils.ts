@@ -188,3 +188,17 @@ export function getTodayReminderCount(timeoutRecords: TimeoutRecord[]): number {
     new Date(r.createdAt).toDateString() === today
   ).length;
 }
+
+export function getStuckBookingsForAssignee(assigneeId: string, bookings: Booking[]): Booking[] {
+  return bookings.filter(booking => {
+    if (booking.status === 'cancelled' || booking.status === 'rejected') return false;
+    
+    return booking.approvalNodes.some(node => {
+      const status = getTimeoutStatus(node);
+      if (status !== 'timeout' && status !== 'escalated') return false;
+      
+      const nodeAssigneeId = node.originalAssignee || node.assignee;
+      return nodeAssigneeId === assigneeId;
+    });
+  });
+}

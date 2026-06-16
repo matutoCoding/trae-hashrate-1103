@@ -345,6 +345,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!currentNode) return;
 
     const realAssigneeName = currentNode.originalAssigneeName || currentNode.assigneeName;
+    const isNodeEscalated = currentNode.status === 'escalated';
 
     const reminderRecord = createApprovalRecord(
       currentNode.id,
@@ -355,7 +356,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       `催办通知已发送至 ${realAssigneeName}，请尽快处理`
     );
 
-    const timeoutRecord = createTimeoutRecord(bookingId, currentNode, false, 1);
+    const timeoutRecord = createTimeoutRecord(bookingId, currentNode, isNodeEscalated, 1);
 
     const updatedBookings = bookings.map((b) => {
       if (b.id === bookingId) {
@@ -368,7 +369,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
 
     const existing = timeoutRecords.find(
-      (r) => r.nodeId === currentNode.id && !r.isEscalated
+      (r) => r.nodeId === currentNode.id && r.isEscalated === isNodeEscalated
     );
     let updatedTimeoutRecords = timeoutRecords;
     if (existing) {

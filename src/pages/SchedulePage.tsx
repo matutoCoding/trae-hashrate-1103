@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Search, Filter, X } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import PageHeader from '@/components/layout/PageHeader';
 import DateSelector from '@/components/schedule/DateSelector';
@@ -26,6 +26,9 @@ export default function SchedulePage() {
 
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [filterTableId, setFilterTableId] = useState<string | 'all'>('all');
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
 
   const currentTable = useMemo(
     () => treatmentTables.find((t) => t.id === selectedTableId),
@@ -83,11 +86,65 @@ export default function SchedulePage() {
 
   const bookings = useAppStore((state) => state.bookings);
 
+  const allTodayBookings = useMemo(() => {
+    return bookings.filter(
+      (b) =>
+        b.date === selectedDate &&
+        b.status !== 'cancelled' &&
+        b.status !== 'rejected'
+    );
+  }, [bookings, selectedDate]);
+
+  const filteredBookings = useMemo(() => {
+    let result = allTodayBookings;
+
+    if (filterTableId !== 'all') {
+      result = result.filter((b) => b.tableId === filterTableId);
+    }
+
+    if (searchKeyword.trim()) {
+      const keyword = searchKeyword.trim().toLowerCase();
+      result = result.filter(
+        (b) =>
+          b.ownerName.toLowerCase().includes(keyword) ||
+          b.ownerPhone.includes(keyword)
+      );
+    }
+
+    return result;
+  }, [allTodayBookings, filterTableId, searchKeyword]);
+
+  const getTableName = (tableId: string) => {
+    return treatmentTables.find((t) => t.id === tableId)?.name || '未知';
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       <PageHeader title="牙科治疗台排期" />
 
       <DateSelector selectedDate={selectedDate} onDateChange={setSelectedDate} />
+
+      <div className="px-4 pt-4 pb-2">
+        <div className="relative">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" style={{ top: '50%' }} />
+          <input
+            type="text"
+            placeholder="搜索宠主姓名或手机号"
+            value={searchKeyword}
+            onChange={(e) => setSearchKeyword(e.target.value)}
+            className="w-full pl-10 pr-10 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400"
+          />
+          {searchKeyword && (
+            <button
+              onClick={() => setSearchKeyword('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              style={{ top: '50%' }}
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
+      </div>
 
       <div className="p-4 space-y-4">
         <div>
@@ -133,14 +190,62 @@ export default function SchedulePage() {
           </div>
         )}
 
-        {selectedTableId && (
-          <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-            <h3 className="font-medium text-gray-900 mb-3">今日预约列表</h3>
-            {tableBookings.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-4">暂无预约</p>
+        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-medium text-gray-900">今日预约列表</h3>
+              <div className="relative">
+                <button
+                  onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <Filter size={12} />
+                  {filterTableId === 'all' ? '全部治疗台' : getTableName(filterTableId)}
+                </button>
+                {showFilterDropdown && (
+                  <div className="absolute right-0 top-full mt-1 w-40 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-40">
+                    <button
+                      onClick={() => {
+                        setFilterTableId('all');
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 ${
+                        filterTableId === 'all' ? 'text-blue-600 font-medium' : 'text-gray-700'
+                      }`}
+                    >
+                      全部治疗台
+                    </button>
+                    {treatmentTables.map((table) => (
+                      <button
+                        key={table.id}
+                        onClick={() => {
+                          setFilterTableId(table.id);
+                          setShowFilterDropdown(false);
+                        }}
+                        className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 ${
+                          filterTableId === table.id ? 'text-blue-600 font-medium' : 'text-gray-700'
+                        }`}
+                      >
+                        {table.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {searchKeyword && (
+              <div className="mb-3 px-3 py-2 bg-blue-50 rounded-lg text-sm text-blue-700">
+                搜索 "{searchKeyword}"，找到 {filteredBookings.length} 条结果
+              </div>
+            )}
+
+            {filteredBookings.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-4">
+                {searchKeyword ? '没有找到匹配的预约' : '暂无预约'}
+              </p>
             ) : (
               <div className="space-y-2">
-                {tableBookings.map((booking) => (
+                {filteredBookings.map((booking) => (
                   <div
                     key={booking.id}
                     onClick={() => handleBookingClick(booking)}
@@ -163,6 +268,11 @@ export default function SchedulePage() {
                         <div className="text-xs text-gray-500">
                           {booking.ownerName} · {booking.treatmentType}
                         </div>
+                        {treatmentTables.length > 1 && (
+                          <div className="text-xs text-gray-400 mt-0.5">
+                            {getTableName(booking.tableId)}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="text-right">
@@ -191,7 +301,6 @@ export default function SchedulePage() {
               </div>
             )}
           </div>
-        )}
       </div>
 
       {selectedSlots.length > 0 && (

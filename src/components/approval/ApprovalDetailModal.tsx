@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { X, CheckCircle, XCircle, Clock, User, Scissors, MessageSquare } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import {
@@ -31,7 +31,13 @@ export default function ApprovalDetailModal({
 
   if (!isOpen || !booking) return null;
 
-  const currentNode = getCurrentApprovalNode(booking);
+  const currentNode = useMemo(() => {
+    const stuck = booking.approvalNodes.find(
+      (n) => n.status === 'timeout' || n.status === 'escalated'
+    );
+    if (stuck) return stuck;
+    return getCurrentApprovalNode(booking);
+  }, [booking]);
   const progress = getApprovalProgress(booking);
   const statusText = getApprovalStatusText(booking.status);
 

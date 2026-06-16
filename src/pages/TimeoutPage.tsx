@@ -6,10 +6,13 @@ import {
   User,
   Bell,
   ArrowUp,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import PageHeader from '@/components/layout/PageHeader';
-import { getTimeoutStats, getTimeoutStatus, formatRemainingTime, calculateElapsedMinutes } from '@/utils/timeoutUtils';
+import ApprovalDetailModal from '@/components/approval/ApprovalDetailModal';
+import { getTimeoutStats, getTimeoutStatus, formatRemainingTime, calculateElapsedMinutes, getStuckBookingsForAssignee } from '@/utils/timeoutUtils';
 import { getCurrentApprovalNode, getStuckTimeoutNode } from '@/utils/approvalUtils';
 import { formatDateTime, formatDuration } from '@/utils/dateUtils';
 import type { Booking } from '@/types';
@@ -25,6 +28,9 @@ export default function TimeoutPage() {
   const [activeTab, setActiveTab] = useState<TabType>('warning');
   const [toast, setToast] = useState<string | null>(null);
   const [, setTick] = useState(0);
+  const [detailBooking, setDetailBooking] = useState<Booking | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [expandedAssignee, setExpandedAssignee] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -74,12 +80,26 @@ export default function TimeoutPage() {
     { key: 'ranking' as TabType, label: '责任统计', count: stats.assigneeRanking.length },
   ];
 
-  const handleRemind = (bookingId: string) => {
+  const handleOpenDetail = (booking: Booking, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const freshBooking = bookings.find(b => b.id === booking.id);
+    setDetailBooking(freshBooking || booking);
+    setIsDetailOpen(true);
+  };
+
+  const handleCloseDetail = () => {
+    setIsDetailOpen(false);
+    setDetailBooking(null);
+  };
+
+  const handleRemind = (bookingId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     remindBooking(bookingId);
     setToast('催办通知已发送');
   };
 
-  const handleEscalate = (bookingId: string) => {
+  const handleEscalate = (bookingId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     escalateBooking(bookingId);
     setToast('已升级至管理员处理');
   };
@@ -115,7 +135,8 @@ export default function TimeoutPage() {
           return (
             <div
               key={booking.id}
-              className="bg-white rounded-xl p-4 shadow-sm border border-yellow-100"
+              onClick={(e) => handleOpenDetail(booking, e)}
+              className="bg-white rounded-xl p-4 shadow-sm border border-yellow-100 cursor-pointer hover:shadow-md transition-shadow"
             >
               <div className="flex items-start justify-between mb-3">
                 <div>
@@ -139,7 +160,7 @@ export default function TimeoutPage() {
               </div>
               <div className="flex justify-end">
                 <button
-                  onClick={() => handleRemind(booking.id)}
+                  onClick={(e) => handleRemind(booking.id, e)}
                   className="px-4 py-1.5 bg-yellow-500 text-white text-sm rounded-lg hover:bg-yellow-600 transition-colors flex items-center gap-1"
                 >
                   <Bell size={14} />
@@ -171,7 +192,8 @@ export default function TimeoutPage() {
           return (
             <div
               key={booking.id}
-              className={`bg-white rounded-xl p-4 shadow-sm border ${
+              onClick={(e) => handleOpenDetail(booking, e)}
+              className={`bg-white rounded-xl p-4 shadow-sm border cursor-pointer hover:shadow-md transition-shadow ${
                 status === 'escalated' ? 'border-red-200' : 'border-orange-200'
               }`}
             >
@@ -220,14 +242,14 @@ export default function TimeoutPage() {
               </div>
               <div className="flex gap-2 justify-end">
                 <button
-                  onClick={() => handleRemind(booking.id)}
+                  onClick={(e) => handleRemind(booking.id, e)}
                   className="px-4 py-1.5 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1"
                 >
                   <Bell size={14} />
                   催办
                 </button>
                 <button
-                  onClick={() => handleEscalate(booking.id)}
+                  onClick={(e) => handleEscalate(booking.id, e)}
                   className={`px-4 py-1.5 text-white text-sm rounded-lg transition-colors flex items-center gap-1 ${
                     status === 'escalated'
                       ? 'bg-red-500 hover:bg-red-600'
@@ -291,7 +313,33 @@ export default function TimeoutPage() {
     </div>
   );
 
-  const renderRanking = () => (
+  const renderRanking = () => {
+    const getAssigneeStuckBookings = (assigneeId: string) => {
+      return getStuckBookingsForAssignee(assigneeId, bookings);
+    };
+
+    const getStuckInfo = (booking: Booking) => {
+      const stuckNode = booking.approvalNodes.find(node => {
+        const status = getTimeoutStatus(node);
+        if (status !== 'timeout' && status !== 'escalated') return false;
+        const nodeAssigneeId = node.originalAssignee || node.assignee;
+        return expandedAssignee === nodeAssigneeId;
+      });
+      if (!stuckNode) return null;
+      return {
+        stuckNode,
+        status: getTimeoutStatus(stuckNode),
+        elapsed: calculateElapsedMinutes(stuckNode),
+        isEscalated: stuckNode.status === 'escalated' || getTimeoutStatus(stuckNode) === 'escalated',
+      };
+    };
+
+    const toggleExpand = (assigneeId: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      setExpandedAssignee(expandedAssignee === assigneeId ? null : assigneeId);
+    };
+
+    return (
     <div className="space-y-3">
       {stats.assigneeRanking.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16">
@@ -302,50 +350,102 @@ export default function TimeoutPage() {
         </div>
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          {stats.assigneeRanking.map((item, index) => (
-            <div
-              key={item.id}
-              className={`flex items-center p-4 ${
-                index !== stats.assigneeRanking.length - 1 ? 'border-b border-gray-50' : ''
-              }`}
-            >
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold mr-3 ${
-                  index === 0
-                    ? 'bg-yellow-100 text-yellow-600'
-                    : index === 1
-                    ? 'bg-gray-100 text-gray-600'
-                    : index === 2
-                    ? 'bg-orange-100 text-orange-600'
-                    : 'bg-gray-50 text-gray-500'
-                }`}
-              >
-                {index + 1}
-              </div>
-              <div className="flex-1">
-                <div className="font-medium text-gray-900">{item.name}</div>
-                <div className="text-xs text-gray-500">
-                  {item.count} 次超时 · 累计 {formatDuration(item.totalMinutes)}
+          {stats.assigneeRanking.map((item, index) => {
+            const isExpanded = expandedAssignee === item.id;
+            const stuckBookings = getAssigneeStuckBookings(item.id);
+            
+            return (
+              <div key={item.id}>
+                <div
+                  onClick={(e) => toggleExpand(item.id, e)}
+                  className={`flex items-center p-4 cursor-pointer hover:bg-gray-50 transition-colors ${
+                    index !== stats.assigneeRanking.length - 1 || isExpanded ? 'border-b border-gray-50' : ''
+                  }`}
+                >
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold mr-3 ${
+                      index === 0
+                        ? 'bg-yellow-100 text-yellow-600'
+                        : index === 1
+                        ? 'bg-gray-100 text-gray-600'
+                        : index === 2
+                        ? 'bg-orange-100 text-orange-600'
+                        : 'bg-gray-50 text-gray-500'
+                    }`}
+                  >
+                    {index + 1}
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900">{item.name}</div>
+                    <div className="text-xs text-gray-500">
+                      {item.count} 次超时 · 累计 {formatDuration(item.totalMinutes)}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-400">{stuckBookings.length} 条卡单</span>
+                    {isExpanded ? (
+                      <ChevronDown size={18} className="text-gray-400" />
+                    ) : (
+                      <ChevronRight size={18} className="text-gray-400" />
+                    )}
+                  </div>
                 </div>
+                
+                {isExpanded && stuckBookings.length > 0 && (
+                  <div className="bg-gray-50 border-b border-gray-100">
+                    {stuckBookings.map((booking, bIndex) => {
+                      const info = getStuckInfo(booking);
+                      if (!info) return null;
+                      const { stuckNode, status, elapsed, isEscalated } = info;
+                      
+                      return (
+                        <div
+                          key={booking.id}
+                          onClick={(e) => handleOpenDetail(booking, e)}
+                          className={`flex items-start p-3 pl-15 cursor-pointer hover:bg-gray-100 transition-colors ${
+                            bIndex !== stuckBookings.length - 1 ? 'border-b border-gray-100' : ''
+                          }`}
+                        >
+                          <div className="flex-1 ml-11">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-medium text-sm text-gray-900">
+                                {booking.petName} · {booking.treatmentType}
+                              </span>
+                              <span
+                                className={`text-xs px-2 py-0.5 rounded-full ${
+                                  isEscalated
+                                    ? 'bg-red-100 text-red-700'
+                                    : 'bg-orange-100 text-orange-700'
+                                }`}
+                              >
+                                {isEscalated ? '已升级' : '已超时'}
+                              </span>
+                            </div>
+                            <div className="text-xs text-gray-500 mb-1">
+                              卡住节点：{stuckNode.nodeName}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              超时时间：{formatDuration(elapsed - stuckNode.timeoutDuration)}
+                            </div>
+                            {isEscalated && (
+                              <div className="text-xs text-red-600 mt-1">
+                                已升级至管理员处理
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-              <ArrowUp
-                size={16}
-                className={`${
-                  index === 0
-                    ? 'text-red-500'
-                    : index === 1
-                    ? 'text-orange-500'
-                    : index === 2
-                    ? 'text-yellow-500'
-                    : 'text-gray-400'
-                }`}
-              />
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
   );
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
@@ -408,6 +508,12 @@ export default function TimeoutPage() {
         {activeTab === 'records' && renderRecords()}
         {activeTab === 'ranking' && renderRanking()}
       </div>
+
+      <ApprovalDetailModal
+        isOpen={isDetailOpen}
+        onClose={handleCloseDetail}
+        booking={detailBooking}
+      />
     </div>
   );
 }
