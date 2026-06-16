@@ -41,7 +41,7 @@ export default function ApprovalPage() {
   ];
 
   const handleApprove = (booking: Booking) => {
-    const currentNode = booking.approvalNodes.find((n) => n.status === 'pending');
+    const currentNode = booking.approvalNodes.find((n) => n.status === 'pending' || n.status === 'escalated');
     if (currentNode) {
       useAppStore.getState().approveBooking(booking.id, currentNode.id, '审批通过');
     }

@@ -139,7 +139,7 @@ export default function ApprovalDetailModal({
             </div>
           </div>
 
-          {currentNode && booking.status === 'pending' && (
+          {currentNode && (booking.status === 'pending' || currentNode.status === 'escalated') && (
             <div
               className={`p-4 rounded-xl border-2 ${
                 getTimeoutStatus(currentNode) === 'timeout' ||
@@ -159,9 +159,16 @@ export default function ApprovalDetailModal({
               <div className="text-lg font-semibold text-gray-900 mb-1">
                 {currentNode.nodeName}
               </div>
-              <div className="text-sm text-gray-600">
-                处理人：{currentNode.assigneeName}
-              </div>
+              {currentNode.originalAssigneeName ? (
+                <div className="text-sm text-gray-600">
+                  <div>原处理人：{currentNode.originalAssigneeName}</div>
+                  <div className="text-red-600">已升级至：{currentNode.assigneeName}</div>
+                </div>
+              ) : (
+                <div className="text-sm text-gray-600">
+                  处理人：{currentNode.assigneeName}
+                </div>
+              )}
               <div className="text-sm text-gray-600">
                 {currentNode.timeoutDuration > 0 && (
                   <span>
@@ -189,6 +196,8 @@ export default function ApprovalDetailModal({
                             ? 'bg-red-500'
                             : node.status === 'timeout' || nodeTimeoutStatus === 'timeout'
                             ? 'bg-orange-500'
+                            : node.status === 'escalated' || nodeTimeoutStatus === 'escalated'
+                            ? 'bg-red-500'
                             : 'bg-gray-300'
                         }`}
                       />
@@ -207,15 +216,22 @@ export default function ApprovalDetailModal({
                               ? 'bg-red-100 text-red-700'
                               : node.status === 'timeout' || nodeTimeoutStatus === 'timeout'
                               ? 'bg-orange-100 text-orange-700'
+                              : node.status === 'escalated' || nodeTimeoutStatus === 'escalated'
+                              ? 'bg-red-100 text-red-700'
                               : 'bg-gray-100 text-gray-600'
                           }`}
                         >
-                          {getNodeStatusText(node.status)}
+                          {node.status === 'escalated' ? '已升级' : getNodeStatusText(node.status)}
                         </span>
                       </div>
                       <div className="text-sm text-gray-500 mt-0.5">
                         处理人：{node.assigneeName}
                       </div>
+                      {node.originalAssigneeName && (
+                        <div className="text-sm text-red-600 mt-0.5">
+                          原处理人：{node.originalAssigneeName}
+                        </div>
+                      )}
                       {node.comment && (
                         <div className="text-xs text-gray-600 mt-1 bg-gray-50 rounded px-2 py-1">
                           {node.comment}
@@ -275,7 +291,7 @@ export default function ApprovalDetailModal({
             </div>
           </div>
 
-          {booking.status === 'pending' && currentNode && (
+          {(booking.status === 'pending' || (currentNode && currentNode.status === 'escalated')) && currentNode && (
             <div className="pt-2">
               {showRejectInput && (
                 <div className="mb-3">

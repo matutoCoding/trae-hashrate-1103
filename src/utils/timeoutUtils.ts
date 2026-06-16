@@ -11,6 +11,8 @@ export function calculateElapsedMinutes(node: ApprovalNode, currentTime: Date = 
 }
 
 export function getTimeoutStatus(node: ApprovalNode, currentTime: Date = new Date()): TimeoutStatus {
+  if (node.status === 'timeout') return 'timeout';
+  if (node.status === 'escalated') return 'escalated';
   if (node.status !== 'pending') return 'normal';
   if (node.timeoutDuration === 0) return 'normal';
   
@@ -89,7 +91,7 @@ export function checkAndUpdateTimeouts(
     
     let hasChanges = false;
     const updatedNodes = booking.approvalNodes.map(node => {
-      if (node.status !== 'pending') return node;
+      if (node.status === 'approved' || node.status === 'rejected') return node;
       
       const status = getTimeoutStatus(node, currentTime);
       
@@ -99,14 +101,10 @@ export function checkAndUpdateTimeouts(
         return { ...node, status: 'timeout' as const };
       }
       
-      if (status === 'escalated') {
-        const existingTimeout = timeoutRecords.find(
-          r => r.nodeId === node.id && r.isEscalated
-        );
-        if (!existingTimeout) {
-          hasChanges = true;
-          timeoutRecords.push(createTimeoutRecord(booking.id, node, true, 2));
-        }
+      if (status === 'escalated' && node.status !== 'escalated') {
+        hasChanges = true;
+        timeoutRecords.push(createTimeoutRecord(booking.id, node, true, 2));
+        return { ...node, status: 'escalated' as const };
       }
       
       return node;

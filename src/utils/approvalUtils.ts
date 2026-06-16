@@ -67,13 +67,13 @@ export function createApprovalRecord(
 }
 
 export function getCurrentApprovalNode(booking: Booking): ApprovalNode | undefined {
-  return booking.approvalNodes.find(node => node.status === 'pending');
+  return booking.approvalNodes.find(node => node.status === 'pending' || node.status === 'escalated');
 }
 
 export function getApprovalProgress(booking: Booking): number {
   const totalNodes = booking.approvalNodes.length;
   const approvedNodes = booking.approvalNodes.filter(
-    n => n.status === 'approved' || n.status === 'timeout'
+    n => n.status === 'approved' || n.status === 'timeout' || n.status === 'escalated'
   ).length;
   
   if (totalNodes === 0) return 0;
@@ -114,7 +114,7 @@ export function approveNode(
     comment
   );
   
-  const allApproved = updatedNodes.every(n => n.status === 'approved' || n.status === 'timeout');
+  const allApproved = updatedNodes.every(n => n.status === 'approved' || n.status === 'timeout' || n.status === 'escalated');
   
   return {
     ...booking,
@@ -164,19 +164,26 @@ export function escalateNode(
 ): Booking {
   const node = booking.approvalNodes.find(n => n.id === nodeId);
   if (!node) return booking;
-  
-  const approvalRecord = createApprovalRecord(
-    nodeId,
-    booking.id,
-    'escalate',
-    'system',
-    '系统自动升级',
-    '审批超时，已自动升级至管理员'
-  );
-  
+
+  const updatedNodes = booking.approvalNodes.map(n => {
+    if (n.id === nodeId) {
+      return {
+        ...n,
+        originalAssignee: n.originalAssignee || n.assignee,
+        originalAssigneeName: n.originalAssigneeName || n.assigneeName,
+        assignee: 'admin1',
+        assigneeName: '管理员',
+        status: 'escalated' as const,
+        escalatedAt: new Date().toISOString(),
+        startTime: new Date().toISOString(),
+      };
+    }
+    return n;
+  });
+
   return {
     ...booking,
-    approvalRecords: [...booking.approvalRecords, approvalRecord],
+    approvalNodes: updatedNodes,
   };
 }
 
@@ -231,6 +238,7 @@ export function getNodeStatusText(status: ApprovalNode['status']): string {
     approved: '已通过',
     rejected: '已驳回',
     timeout: '已超时',
+    escalated: '已升级',
   };
   return statusMap[status];
 }

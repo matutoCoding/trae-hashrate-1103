@@ -46,7 +46,8 @@ export default function TimeoutPage() {
   const warningBookings = useMemo(() => {
     return bookings.filter(
       (b) =>
-        b.status === 'pending' &&
+        b.status !== 'cancelled' &&
+        b.status !== 'rejected' &&
         b.approvalNodes.some((n) => {
           const status = getTimeoutStatus(n);
           return status === 'warning';
@@ -57,7 +58,8 @@ export default function TimeoutPage() {
   const timeoutBookings = useMemo(() => {
     return bookings.filter(
       (b) =>
-        b.status === 'pending' &&
+        b.status !== 'cancelled' &&
+        b.status !== 'rejected' &&
         b.approvalNodes.some((n) => {
           const status = getTimeoutStatus(n);
           return status === 'timeout' || status === 'escalated';

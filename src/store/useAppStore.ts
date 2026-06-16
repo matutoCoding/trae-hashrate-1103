@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { TreatmentTable, Booking, TimeSlot, TimeoutRecord } from '@/types';
 import { mockTreatmentTables, mockBookings, mockTimeoutRecords } from '@/data/mockData';
 import { generateTimeSlots, getToday, timeDiffMinutes } from '@/utils/dateUtils';
-import { mergeBookings, splitBooking } from '@/utils/mergeUtils';
+import { mergeBookings, splitBooking, mergeAllBookings } from '@/utils/mergeUtils';
 import {
   approveNode,
   rejectNode,
@@ -49,6 +49,8 @@ const persisted = loadFromStorage<PersistedData>(STORAGE_KEY, {
   bookings: mockBookings,
   timeoutRecords: mockTimeoutRecords,
 });
+
+const initialBookings = mergeAllBookings(persisted.bookings);
 
 interface AppState {
   treatmentTables: TreatmentTable[];
@@ -108,7 +110,7 @@ function persist(state: { treatmentTables: TreatmentTable[]; bookings: Booking[]
 
 export const useAppStore = create<AppState>((set, get) => ({
   treatmentTables: persisted.treatmentTables,
-  bookings: persisted.bookings,
+  bookings: initialBookings,
   selectedDate: getToday(),
   selectedTableId: persisted.treatmentTables[0]?.id || null,
   selectedSlots: [],
@@ -248,8 +250,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     const result = mergeBookings(bookings, newBooking);
 
+    const allMergedBookings = mergeAllBookings(result.mergedBookings);
+
     const newState = {
-      bookings: result.mergedBookings,
+      bookings: allMergedBookings,
       selectedSlots: [],
     };
     set(newState);
@@ -335,7 +339,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     const booking = bookings.find((b) => b.id === bookingId);
     if (!booking) return;
 
-    const currentNode = booking.approvalNodes.find((n) => n.status === 'pending');
+    const currentNode = booking.approvalNodes.find(
+      (n) => n.status === 'pending' || n.status === 'timeout' || n.status === 'escalated'
+    );
     if (!currentNode) return;
 
     const reminderRecord = createApprovalRecord(
@@ -383,8 +389,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     const booking = bookings.find((b) => b.id === bookingId);
     if (!booking) return;
 
-    const currentNode = booking.approvalNodes.find((n) => n.status === 'pending');
+    const currentNode = booking.approvalNodes.find(
+      (n) => n.status === 'pending' || n.status === 'timeout' || n.status === 'escalated'
+    );
     if (!currentNode) return;
+
+    const originalAssigneeName = currentNode.originalAssigneeName || currentNode.assigneeName;
 
     const updatedBooking = escalateNode(booking, currentNode.id);
 
@@ -394,11 +404,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       'escalate',
       'system',
       '系统升级催办',
-      `审批超时已升级，原责任人：${currentNode.assigneeName}，现升级至管理员处理`
+      `审批超时已升级，原责任人：${originalAssigneeName}，现升级至管理员处理`
     );
     updatedBooking.approvalRecords = [...updatedBooking.approvalRecords, escalateRecord];
 
-    const timeoutRecord = createTimeoutRecord(bookingId, currentNode, true, 1);
+    const newCurrentNode = updatedBooking.approvalNodes.find(n => n.id === currentNode.id);
+    const timeoutRecord = createTimeoutRecord(bookingId, newCurrentNode || currentNode, true, 1);
 
     const updatedBookings = bookings.map((b) =>
       b.id === bookingId ? updatedBooking : b

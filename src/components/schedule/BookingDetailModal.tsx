@@ -152,6 +152,8 @@ export default function BookingDetailModal({
                           ? 'bg-red-500'
                           : record.action === 'submit'
                           ? 'bg-blue-500'
+                          : record.action === 'escalate'
+                          ? 'bg-orange-500'
                           : 'bg-yellow-500'
                       }`}
                     />

@@ -45,11 +45,14 @@ export interface ApprovalNode {
   nodeOrder: number;
   assignee: string;
   assigneeName: string;
-  status: 'pending' | 'approved' | 'rejected' | 'timeout';
+  originalAssignee?: string;
+  originalAssigneeName?: string;
+  status: 'pending' | 'approved' | 'rejected' | 'timeout' | 'escalated';
   startTime: string;
   endTime?: string;
   timeoutDuration: number;
   comment?: string;
+  escalatedAt?: string;
 }
 
 export interface ApprovalRecord {

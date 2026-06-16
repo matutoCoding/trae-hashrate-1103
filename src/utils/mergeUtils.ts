@@ -194,3 +194,85 @@ export function getBookingsForSlot(
       b.status !== 'rejected'
   );
 }
+
+export function mergeAllBookings(bookings: Booking[]): Booking[] {
+  const activeBookings = bookings.filter(
+    (b) => b.status !== 'cancelled' && b.status !== 'rejected'
+  );
+
+  const otherBookings = bookings.filter(
+    (b) => b.status === 'cancelled' || b.status === 'rejected'
+  );
+
+  const groups: Record<string, Booking[]> = {};
+
+  activeBookings.forEach((booking) => {
+    const key = `${booking.ownerName}|${booking.ownerPhone}|${booking.tableId}|${booking.date}`;
+    if (!groups[key]) {
+      groups[key] = [];
+    }
+    groups[key].push(booking);
+  });
+
+  const mergedResults: Booking[] = [];
+
+  Object.values(groups).forEach((group) => {
+    if (group.length <= 1) {
+      mergedResults.push(...group);
+      return;
+    }
+
+    const sorted = sortBookingsByTime(group);
+    const remaining = [...sorted];
+    const finalMerged: Booking[] = [];
+
+    while (remaining.length > 0) {
+      let current = { ...remaining.shift()! };
+      const currentMergedIds = [current.id];
+      let changed = true;
+
+      while (changed) {
+        changed = false;
+        for (let i = 0; i < remaining.length; i++) {
+          const other = remaining[i];
+          if (currentMergedIds.includes(other.id)) continue;
+
+          if (checkCanMerge(current, other)) {
+            const earlier =
+              timeDiffMinutes(current.startTime, other.startTime) > 0
+                ? current
+                : other;
+            const later = earlier === current ? other : current;
+
+            const mergedApprovalRecords = [
+              ...current.approvalRecords,
+              ...other.approvalRecords.filter(
+                (r) => !current.approvalRecords.some((cr) => cr.id === r.id)
+              ),
+            ];
+
+            current = {
+              ...current,
+              id: current.id,
+              startTime: earlier.startTime,
+              endTime: later.endTime,
+              mergedSlotIds: [...earlier.mergedSlotIds, ...later.mergedSlotIds],
+              approvalRecords: mergedApprovalRecords,
+            };
+
+            currentMergedIds.push(other.id);
+            remaining.splice(i, 1);
+            changed = true;
+            break;
+          }
+        }
+      }
+
+      finalMerged.push(current);
+    }
+
+    mergedResults.push(...finalMerged);
+  });
+
+  return [...mergedResults, ...otherBookings];
+}

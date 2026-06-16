@@ -118,16 +118,36 @@ export default function Timeline({
     }
   };
 
-  const handleBlockClick = (block: ReturnType<typeof getMergedBlocks>[0]) => {
+  const handleBlockClick = (
+    block: ReturnType<typeof getMergedBlocks>[0],
+    e: React.MouseEvent<HTMLDivElement>
+  ) => {
     if (block.booking && onBookingClick) {
       onBookingClick(block.booking);
     } else if (!block.booking && onSlotClick) {
-      if (selectedSlots.length > 0 && !selectedSlots.includes(slots[block.startIndex].id)) {
+      const container = e.currentTarget.parentElement;
+      if (!container) return;
+
+      const rect = container.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const clickPercent = clickX / rect.width;
+
+      const clickedIndex = Math.min(
+        slots.length - 1,
+        Math.max(0, Math.floor(clickPercent * slots.length))
+      );
+
+      const clickedSlot = slots[clickedIndex];
+      if (!clickedSlot || clickedSlot.status === 'booked') return;
+
+      if (selectedSlots.length > 0 && !selectedSlots.includes(clickedSlot.id)) {
         for (let i = block.startIndex; i <= block.endIndex; i++) {
-          onSlotClick(slots[i]);
+          if (slots[i].status !== 'booked') {
+            onSlotClick(slots[i]);
+          }
         }
       } else {
-        onSlotClick(slots[block.startIndex]);
+        onSlotClick(clickedSlot);
       }
     }
   };
@@ -195,7 +215,7 @@ export default function Timeline({
                     : 'bg-green-50 border-green-200 hover:bg-green-100'
                 }`}
                 style={getBlockStyle(block)}
-                onClick={() => handleBlockClick(block)}
+                onClick={(e) => handleBlockClick(block, e)}
               >
                 {block.booking && block.endIndex - block.startIndex >= 1 && (
                   <div className="p-1 text-xs font-medium truncate">
