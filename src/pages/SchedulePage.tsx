@@ -20,17 +20,12 @@ export default function SchedulePage() {
     setSelectedDate,
     setSelectedTableId,
     getTimeSlotsForTable,
-    toggleSlotSelection,
+    selectSlotRange,
     clearSlotSelection,
   } = useAppStore();
 
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
-
-  const activeTables = useMemo(
-    () => treatmentTables.filter((t) => t.status === 'active'),
-    [treatmentTables]
-  );
 
   const currentTable = useMemo(
     () => treatmentTables.find((t) => t.id === selectedTableId),
@@ -51,15 +46,11 @@ export default function SchedulePage() {
         b.status !== 'cancelled' &&
         b.status !== 'rejected'
     );
-  }, [selectedTableId, selectedDate]);
-
-  const occupancyRate = useMemo(() => {
-    return calculateOccupancyRate(slots, tableBookings);
-  }, [slots, tableBookings]);
+  }, [selectedTableId, selectedDate, useAppStore.getState().bookings]);
 
   const handleSlotClick = (slot: TimeSlot) => {
     if (slot.status === 'booked') return;
-    toggleSlotSelection(slot.id);
+    selectSlotRange(slot.id, slots);
   };
 
   const handleBookingClick = (booking: Booking) => {
@@ -90,6 +81,8 @@ export default function SchedulePage() {
     setIsBookingModalOpen(true);
   };
 
+  const bookings = useAppStore((state) => state.bookings);
+
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       <PageHeader title="牙科治疗台排期" />
@@ -102,15 +95,13 @@ export default function SchedulePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {treatmentTables.map((table) => {
               const tableSlots = getTimeSlotsForTable(table.id, selectedDate);
-              const tableBookingsList = useAppStore
-                .getState()
-                .bookings.filter(
-                  (b) =>
-                    b.tableId === table.id &&
-                    b.date === selectedDate &&
-                    b.status !== 'cancelled' &&
-                    b.status !== 'rejected'
-                );
+              const tableBookingsList = bookings.filter(
+                (b) =>
+                  b.tableId === table.id &&
+                  b.date === selectedDate &&
+                  b.status !== 'cancelled' &&
+                  b.status !== 'rejected'
+              );
               const rate = calculateOccupancyRate(tableSlots, tableBookingsList);
 
               return (
@@ -137,6 +128,7 @@ export default function SchedulePage() {
               onSlotClick={handleSlotClick}
               onBookingClick={handleBookingClick}
               selectedSlots={selectedSlots}
+              allSlots={slots}
             />
           </div>
         )}
@@ -186,6 +178,7 @@ export default function SchedulePage() {
                             : 'text-gray-400'
                         }`}
                       >
+                        {booking.mergedSlotIds.length > 1 ? `${booking.mergedSlotIds.length}时段合并 · ` : ''}
                         {booking.status === 'approved'
                           ? '已确认'
                           : booking.status === 'pending'

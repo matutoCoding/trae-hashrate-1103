@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useAppStore } from '@/store/useAppStore';
-import { getBookingsForSlot, calculateOccupancyRate } from '@/utils/mergeUtils';
+import { calculateOccupancyRate } from '@/utils/mergeUtils';
 import type { TimeSlot, Booking } from '@/types';
 
 interface TimelineProps {
@@ -9,6 +9,7 @@ interface TimelineProps {
   onSlotClick?: (slot: TimeSlot) => void;
   onBookingClick?: (booking: Booking) => void;
   selectedSlots?: string[];
+  allSlots?: TimeSlot[];
 }
 
 export default function Timeline({
@@ -17,6 +18,7 @@ export default function Timeline({
   onSlotClick,
   onBookingClick,
   selectedSlots = [],
+  allSlots = [],
 }: TimelineProps) {
   const getTimeSlotsForTable = useAppStore((state) => state.getTimeSlotsForTable);
   const bookings = useAppStore((state) => state.bookings);
@@ -116,14 +118,26 @@ export default function Timeline({
     }
   };
 
+  const handleBlockClick = (block: ReturnType<typeof getMergedBlocks>[0]) => {
+    if (block.booking && onBookingClick) {
+      onBookingClick(block.booking);
+    } else if (!block.booking && onSlotClick) {
+      if (selectedSlots.length > 0 && !selectedSlots.includes(slots[block.startIndex].id)) {
+        for (let i = block.startIndex; i <= block.endIndex; i++) {
+          onSlotClick(slots[i]);
+        }
+      } else {
+        onSlotClick(slots[block.startIndex]);
+      }
+    }
+  };
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
         <div>
           <h3 className="font-medium text-gray-900">今日排期</h3>
-          <p className="text-xs text-gray-500">
-            占用率: {occupancyRate}%
-          </p>
+          <p className="text-xs text-gray-500">占用率: {occupancyRate}%</p>
         </div>
         <div className="flex gap-3 text-xs">
           <span className="flex items-center gap-1">
@@ -181,14 +195,7 @@ export default function Timeline({
                     : 'bg-green-50 border-green-200 hover:bg-green-100'
                 }`}
                 style={getBlockStyle(block)}
-                onClick={() => {
-                  if (block.booking && onBookingClick) {
-                    onBookingClick(block.booking);
-                  } else if (!block.booking && onSlotClick) {
-                    const slot = slots[block.startIndex];
-                    onSlotClick(slot);
-                  }
-                }}
+                onClick={() => handleBlockClick(block)}
               >
                 {block.booking && block.endIndex - block.startIndex >= 1 && (
                   <div className="p-1 text-xs font-medium truncate">
@@ -200,7 +207,7 @@ export default function Timeline({
                 )}
                 {!block.booking && block.isSelected && (
                   <div className="flex items-center justify-center h-full text-xs text-blue-600 font-medium">
-                    已选
+                    已选 {block.startTime}-{block.endTime}
                   </div>
                 )}
               </div>

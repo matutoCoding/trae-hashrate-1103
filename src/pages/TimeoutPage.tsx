@@ -6,7 +6,6 @@ import {
   User,
   Bell,
   ArrowUp,
-  ChevronRight,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import PageHeader from '@/components/layout/PageHeader';
@@ -21,7 +20,10 @@ export default function TimeoutPage() {
   const bookings = useAppStore((state) => state.bookings);
   const timeoutRecords = useAppStore((state) => state.timeoutRecords);
   const updateTimeouts = useAppStore((state) => state.updateTimeouts);
+  const remindBooking = useAppStore((state) => state.remindBooking);
+  const escalateBooking = useAppStore((state) => state.escalateBooking);
   const [activeTab, setActiveTab] = useState<TabType>('warning');
+  const [toast, setToast] = useState<string | null>(null);
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -31,6 +33,13 @@ export default function TimeoutPage() {
     }, 10000);
     return () => clearInterval(timer);
   }, [updateTimeouts]);
+
+  useEffect(() => {
+    if (toast) {
+      const t = setTimeout(() => setToast(null), 2000);
+      return () => clearTimeout(t);
+    }
+  }, [toast]);
 
   const stats = useMemo(() => getTimeoutStats(bookings), [bookings]);
 
@@ -69,6 +78,16 @@ export default function TimeoutPage() {
     return Math.floor((now.getTime() - startTime.getTime()) / 1000 / 60);
   };
 
+  const handleRemind = (bookingId: string) => {
+    remindBooking(bookingId);
+    setToast('催办通知已发送');
+  };
+
+  const handleEscalate = (bookingId: string) => {
+    escalateBooking(bookingId);
+    setToast('已升级至管理员处理');
+  };
+
   const renderWarningList = () => (
     <div className="space-y-3">
       {warningBookings.length === 0 ? (
@@ -82,7 +101,6 @@ export default function TimeoutPage() {
         warningBookings.map((booking) => {
           const currentNode = getCurrentApprovalNode(booking);
           if (!currentNode) return null;
-          const status = getTimeoutStatus(currentNode);
           const remaining = formatRemainingTime(
             Math.max(0, currentNode.timeoutDuration - getElapsedMinutes(currentNode))
           );
@@ -113,7 +131,10 @@ export default function TimeoutPage() {
                 </div>
               </div>
               <div className="flex justify-end">
-                <button className="px-4 py-1.5 bg-yellow-500 text-white text-sm rounded-lg hover:bg-yellow-600 transition-colors flex items-center gap-1">
+                <button
+                  onClick={() => handleRemind(booking.id)}
+                  className="px-4 py-1.5 bg-yellow-500 text-white text-sm rounded-lg hover:bg-yellow-600 transition-colors flex items-center gap-1"
+                >
                   <Bell size={14} />
                   催办
                 </button>
@@ -189,11 +210,15 @@ export default function TimeoutPage() {
                 </div>
               </div>
               <div className="flex gap-2 justify-end">
-                <button className="px-4 py-1.5 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1">
-                  <User size={14} />
-                  查看
+                <button
+                  onClick={() => handleRemind(booking.id)}
+                  className="px-4 py-1.5 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1"
+                >
+                  <Bell size={14} />
+                  催办
                 </button>
                 <button
+                  onClick={() => handleEscalate(booking.id)}
                   className={`px-4 py-1.5 text-white text-sm rounded-lg transition-colors flex items-center gap-1 ${
                     status === 'escalated'
                       ? 'bg-red-500 hover:bg-red-600'
@@ -221,7 +246,7 @@ export default function TimeoutPage() {
           <p className="text-gray-400">暂无催办记录</p>
         </div>
       ) : (
-        timeoutRecords.map((record) => (
+        [...timeoutRecords].reverse().map((record) => (
           <div
             key={record.id}
             className="bg-white rounded-xl p-4 shadow-sm border border-gray-100"
@@ -314,6 +339,12 @@ export default function TimeoutPage() {
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       <PageHeader title="超时监控" />
+
+      {toast && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg animate-slide-down">
+          {toast}
+        </div>
+      )}
 
       <div className="p-4">
         <div className="grid grid-cols-3 gap-3 mb-4">
