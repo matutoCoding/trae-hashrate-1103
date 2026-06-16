@@ -70,6 +70,12 @@ export function getCurrentApprovalNode(booking: Booking): ApprovalNode | undefin
   return booking.approvalNodes.find(node => node.status === 'pending' || node.status === 'escalated');
 }
 
+export function getStuckTimeoutNode(booking: Booking): ApprovalNode | undefined {
+  return booking.approvalNodes.find(
+    node => node.status === 'timeout' || node.status === 'escalated'
+  );
+}
+
 export function getApprovalProgress(booking: Booking): number {
   const totalNodes = booking.approvalNodes.length;
   const approvedNodes = booking.approvalNodes.filter(

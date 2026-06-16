@@ -52,9 +52,11 @@ export default function Timeline({
       startTime: string;
       endTime: string;
       isSelected: boolean;
+      isFree: boolean;
     }[] = [];
 
     let currentBookingId: string | null = null;
+    let currentIsSelected: boolean | null = null;
     let currentBlock: (typeof blocks)[0] | null = null;
 
     slots.forEach((slot, index) => {
@@ -63,8 +65,12 @@ export default function Timeline({
         : undefined;
       const bookingId = booking?.id || null;
       const isSelected = selectedSlots.includes(slot.id);
+      const isFree = !booking;
 
-      if (bookingId && bookingId === currentBookingId && currentBlock) {
+      const sameBooking = bookingId !== null && bookingId === currentBookingId;
+      const sameFreeSelected = isFree && currentIsSelected !== null && isSelected === currentIsSelected;
+
+      if ((sameBooking || sameFreeSelected) && currentBlock) {
         currentBlock.endIndex = index;
         currentBlock.endTime = slot.endTime;
         if (isSelected) currentBlock.isSelected = true;
@@ -73,15 +79,17 @@ export default function Timeline({
           blocks.push(currentBlock);
         }
         currentBlock = {
-          id: booking ? `block-${booking.id}` : `free-${index}`,
+          id: booking ? `block-${booking.id}-${index}` : `free-${isSelected ? 'sel' : 'unsel'}-${index}`,
           booking,
           startIndex: index,
           endIndex: index,
           startTime: slot.startTime,
           endTime: slot.endTime,
           isSelected,
+          isFree,
         };
         currentBookingId = bookingId;
+        currentIsSelected = isFree ? isSelected : null;
       }
     });
 
@@ -140,15 +148,7 @@ export default function Timeline({
       const clickedSlot = slots[clickedIndex];
       if (!clickedSlot || clickedSlot.status === 'booked') return;
 
-      if (selectedSlots.length > 0 && !selectedSlots.includes(clickedSlot.id)) {
-        for (let i = block.startIndex; i <= block.endIndex; i++) {
-          if (slots[i].status !== 'booked') {
-            onSlotClick(slots[i]);
-          }
-        }
-      } else {
-        onSlotClick(clickedSlot);
-      }
+      onSlotClick(clickedSlot);
     }
   };
 
@@ -225,9 +225,9 @@ export default function Timeline({
                     </div>
                   </div>
                 )}
-                {!block.booking && block.isSelected && (
+                {block.isFree && block.isSelected && block.endIndex - block.startIndex >= 0 && (
                   <div className="flex items-center justify-center h-full text-xs text-blue-600 font-medium">
-                    已选 {block.startTime}-{block.endTime}
+                    {block.startTime}-{block.endTime}
                   </div>
                 )}
               </div>

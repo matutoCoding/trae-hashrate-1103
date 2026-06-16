@@ -71,8 +71,8 @@ export function createTimeoutRecord(
     bookingId,
     nodeId: node.id,
     nodeName: node.nodeName,
-    assignee: node.assignee,
-    assigneeName: node.assigneeName,
+    assignee: node.originalAssignee || node.assignee,
+    assigneeName: node.originalAssigneeName || node.assigneeName,
     timeoutDuration: calculateElapsedMinutes(node),
     isEscalated,
     reminderCount,
@@ -154,15 +154,18 @@ export function getTimeoutStats(bookings: Booking[]) {
       }
       
       if (status === 'timeout' || status === 'escalated') {
-        if (!assigneeStats[node.assignee]) {
-          assigneeStats[node.assignee] = {
-            name: node.assigneeName,
+        const statId = node.originalAssignee || node.assignee;
+        const statName = node.originalAssigneeName || node.assigneeName;
+        
+        if (!assigneeStats[statId]) {
+          assigneeStats[statId] = {
+            name: statName,
             count: 0,
             totalMinutes: 0,
           };
         }
-        assigneeStats[node.assignee].count++;
-        assigneeStats[node.assignee].totalMinutes += calculateElapsedMinutes(node);
+        assigneeStats[statId].count++;
+        assigneeStats[statId].totalMinutes += calculateElapsedMinutes(node);
       }
     });
   });

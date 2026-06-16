@@ -344,13 +344,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     );
     if (!currentNode) return;
 
+    const realAssigneeName = currentNode.originalAssigneeName || currentNode.assigneeName;
+
     const reminderRecord = createApprovalRecord(
       currentNode.id,
       bookingId,
       'timeout',
       'system',
       '系统催办',
-      `催办通知已发送至 ${currentNode.assigneeName}，请尽快处理`
+      `催办通知已发送至 ${realAssigneeName}，请尽快处理`
     );
 
     const timeoutRecord = createTimeoutRecord(bookingId, currentNode, false, 1);

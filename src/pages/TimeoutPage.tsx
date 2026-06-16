@@ -9,8 +9,8 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import PageHeader from '@/components/layout/PageHeader';
-import { getTimeoutStats, getTimeoutStatus, formatRemainingTime } from '@/utils/timeoutUtils';
-import { getCurrentApprovalNode } from '@/utils/approvalUtils';
+import { getTimeoutStats, getTimeoutStatus, formatRemainingTime, calculateElapsedMinutes } from '@/utils/timeoutUtils';
+import { getCurrentApprovalNode, getStuckTimeoutNode } from '@/utils/approvalUtils';
 import { formatDateTime, formatDuration } from '@/utils/dateUtils';
 import type { Booking } from '@/types';
 
@@ -74,12 +74,6 @@ export default function TimeoutPage() {
     { key: 'ranking' as TabType, label: '责任统计', count: stats.assigneeRanking.length },
   ];
 
-  const getElapsedMinutes = (node: any) => {
-    const startTime = new Date(node.startTime);
-    const now = new Date();
-    return Math.floor((now.getTime() - startTime.getTime()) / 1000 / 60);
-  };
-
   const handleRemind = (bookingId: string) => {
     remindBooking(bookingId);
     setToast('催办通知已发送');
@@ -88,6 +82,17 @@ export default function TimeoutPage() {
   const handleEscalate = (bookingId: string) => {
     escalateBooking(bookingId);
     setToast('已升级至管理员处理');
+  };
+
+  const getStuckDisplayInfo = (booking: Booking) => {
+    const stuckNode = getStuckTimeoutNode(booking);
+    if (!stuckNode) return null;
+
+    const status = getTimeoutStatus(stuckNode);
+    const elapsed = calculateElapsedMinutes(stuckNode);
+    const realAssigneeName = stuckNode.originalAssigneeName || stuckNode.assigneeName;
+
+    return { stuckNode, status, elapsed, realAssigneeName };
   };
 
   const renderWarningList = () => (
@@ -104,7 +109,7 @@ export default function TimeoutPage() {
           const currentNode = getCurrentApprovalNode(booking);
           if (!currentNode) return null;
           const remaining = formatRemainingTime(
-            Math.max(0, currentNode.timeoutDuration - getElapsedMinutes(currentNode))
+            Math.max(0, currentNode.timeoutDuration - calculateElapsedMinutes(currentNode))
           );
 
           return (
@@ -159,10 +164,9 @@ export default function TimeoutPage() {
         </div>
       ) : (
         timeoutBookings.map((booking) => {
-          const currentNode = getCurrentApprovalNode(booking);
-          if (!currentNode) return null;
-          const status = getTimeoutStatus(currentNode);
-          const elapsed = getElapsedMinutes(currentNode);
+          const info = getStuckDisplayInfo(booking);
+          if (!info) return null;
+          const { stuckNode, status, elapsed, realAssigneeName } = info;
 
           return (
             <div
@@ -197,18 +201,21 @@ export default function TimeoutPage() {
                   <span
                     className={status === 'escalated' ? 'text-red-800' : 'text-orange-800'}
                   >
-                    {currentNode.nodeName}
+                    {stuckNode.nodeName}
                   </span>
                   <span
                     className={`font-medium ${
                       status === 'escalated' ? 'text-red-600' : 'text-orange-600'
                     }`}
                   >
-                    已超时 {formatDuration(elapsed - currentNode.timeoutDuration)}
+                    已超时 {formatDuration(Math.max(0, elapsed - stuckNode.timeoutDuration))}
                   </span>
                 </div>
                 <div className={`text-xs ${status === 'escalated' ? 'text-red-600' : 'text-orange-600'}`}>
-                  责任人：{currentNode.assigneeName}
+                  卡住责任人：{realAssigneeName}
+                  {stuckNode.originalAssigneeName && (
+                    <span className="ml-1">(已升级至 {stuckNode.assigneeName})</span>
+                  )}
                 </div>
               </div>
               <div className="flex gap-2 justify-end">
@@ -248,7 +255,9 @@ export default function TimeoutPage() {
           <p className="text-gray-400">暂无催办记录</p>
         </div>
       ) : (
-        [...timeoutRecords].reverse().map((record) => (
+        [...timeoutRecords]
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+          .map((record) => (
           <div
             key={record.id}
             className="bg-white rounded-xl p-4 shadow-sm border border-gray-100"
@@ -267,7 +276,7 @@ export default function TimeoutPage() {
                     : 'bg-orange-100 text-orange-700'
                 }`}
               >
-                {record.isEscalated ? '升级催办' : '自动催办'}
+                {record.isEscalated ? '升级催办' : '催办'}
               </span>
             </div>
             <div className="text-xs text-gray-400">
